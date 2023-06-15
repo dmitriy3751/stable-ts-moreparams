@@ -54,8 +54,11 @@ def transcribe_stable(
         demucs: bool = False,
         demucs_output: str = None,
         vad: bool = False,
+        vad_repo_or_dir: str = 'snakers4/silero-vad',
         vad_threshold: float = 0.35,
         vad_onnx: bool = False,
+        vad_min_speech_duration_ms: int = 100,
+        vad_min_silence_duration_ms: int = 20,
         min_word_dur: float = 0.1,
         only_voice_freq: bool = False,
         prepend_punctuations: str = "\"'“¿([{-",
@@ -156,12 +159,21 @@ def transcribe_stable(
         Whether to use Silero VAD to generate timestamp suppression mask. (Default: False)
         Silero VAD requires PyTorch 1.12.0+. Official repo: https://github.com/snakers4/silero-vad
 
+    vad_repo_or_dir: str
+        VAD repo name (default = 'snakers4/silero-vad') or local directory (for offline cases)
+
     vad_threshold: float
         Threshold for detecting speech with Silero VAD. (Default: 0.35)
         Low threshold reduces false positives for silence detection.
 
     vad_onnx: bool
         Whether to use ONNX for Silero VAD. (Default: False)
+
+    vad_min_speech_duration_ms: int
+        Final speech chunks shorter min_speech_duration_ms are thrown out
+
+    vad_min_silence_duration_ms: int
+        In the end of each speech chunk wait for min_silence_duration_ms before separating it
 
     min_word_dur: float
         Only allow suppressing timestamps that result in word durations greater than this value. (default: 0.1)
@@ -391,7 +403,9 @@ def transcribe_stable(
 
     silence_timing = None
     if suppress_silence and vad:
-        silence_timing = get_vad_silence_func(onnx=vad_onnx, verbose=verbose)(audio, speech_threshold=vad_threshold)
+        silence_timing = get_vad_silence_func(onnx=vad_onnx, verbose=verbose, vad_repo_or_dir=vad_repo_or_dir)(audio, threshold=vad_threshold,
+                                                                              min_speech_duration_ms=vad_min_speech_duration_ms,
+                                                                              min_silence_duration_ms=vad_min_silence_duration_ms)
 
     with tqdm(total=total_duration, unit='sec', disable=verbose is not False) as tqdm_pbar:
 

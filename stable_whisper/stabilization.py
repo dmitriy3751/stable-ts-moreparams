@@ -251,13 +251,14 @@ _model_cache = {}
 
 def get_vad_silence_func(
         onnx=False,
-        verbose: bool = False
+        verbose: bool = False,
+        vad_repo_or_dir: str = 'snakers4/silero-vad'
 ):
     assert SAMPLE_RATE in (16000, 8000), f'silero-vad does not support samplerate: {SAMPLE_RATE}'
     if onnx in _model_cache:
         model, get_ts = _model_cache[onnx]
     else:
-        model, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
+        model, utils = torch.hub.load(repo_or_dir=vad_repo_or_dir,
                                       model='silero_vad',
                                       verbose=verbose,
                                       onnx=onnx)
@@ -266,12 +267,15 @@ def get_vad_silence_func(
 
     warnings.filterwarnings('ignore', message=r'operator \(\) profile_node.*', category=UserWarning)
 
-    def get_speech_timestamps(wav: torch.Tensor, threshold: float = .35):
-        return get_ts(wav, model, threshold, min_speech_duration_ms=100, min_silence_duration_ms=20)
+    def get_speech_timestamps(wav: torch.Tensor, threshold: float = .35,
+                              min_speech_duration_ms: int = 100, min_silence_duration_ms: int = 20):
+        return get_ts(wav, model, threshold, min_speech_duration_ms=min_speech_duration_ms, min_silence_duration_ms=min_silence_duration_ms)
 
     def vad_silence_timing(
             audio: (torch.Tensor, np.ndarray, str),
-            speech_threshold: float = .35
+            speech_threshold: float = .35,
+            min_speech_duration_ms: int = 100,
+            min_silence_duration_ms: int = 20
     ) -> (Tuple[np.ndarray, np.ndarray], None):
 
         audio = standardize_audio(audio)
@@ -283,7 +287,7 @@ def get_vad_silence_func(
         if verbose is not None:
             print(f'Predicting silences(s) with VAD...\r', end='')
         torch.set_num_threads(1)  # vad was optimized for single performance
-        speech_ts = get_speech_timestamps(audio, speech_threshold)
+        speech_ts = get_speech_timestamps(audio, speech_threshold, min_speech_duration_ms, min_silence_duration_ms)
         if verbose is not None:
             print(f'Predicted silence(s) with VAD       ')
         torch.set_num_threads(ori_t)
@@ -322,6 +326,9 @@ def visualize_suppression(
         k_size: int = 5,
         vad_threshold: float = 0.35,
         vad: bool = False,
+        vad_min_speech_duration_ms: int = 100,
+        vad_min_silence_duration_ms: int = 20,
+        vad_repo_or_dir: str = 'snakers4/silero-vad',
         max_width: int = 1500,
         height: int = 200
 ):
@@ -345,6 +352,12 @@ def visualize_suppression(
     vad_threshold: float
         Threshold for detecting speech with Silero VAD. (Default: 0.35)
         Low threshold reduces false positives for silence detection.
+    vad_min_speech_duration_ms: int
+        Final speech chunks shorter min_speech_duration_ms are thrown out
+    vad_min_silence_duration_ms: int
+        In the end of each speech chunk wait for min_silence_duration_ms before separating it
+    vad_repo_or_dir: str
+        VAD repo name (default = 'snakers4/silero-vad') or local directory (for offline cases)
     vad: bool
         Whether to use Silero VAD to generate timestamp suppression mask. (Default: False)
         Silero VAD requires PyTorch 1.12.0+. Official repo: https://github.com/snakers4/silero-vad
@@ -368,7 +381,7 @@ def visualize_suppression(
         raise NotImplementedError(f'Audio is too short and cannot visualized.')
 
     if vad:
-        silence_timings = get_vad_silence_func()(audio, vad_threshold)
+        silence_timings = get_vad_silence_func(vad_repo_or_dir=vad_repo_or_dir)(audio, vad_threshold, vad_min_speech_duration_ms, vad_min_silence_duration_ms)
         silence_mask = None if silence_timings is None else timing2mask(*silence_timings, size=loudness_tensor.shape[0])
     else:
         silence_mask = wav2mask(audio, q_levels=q_levels, k_size=k_size)

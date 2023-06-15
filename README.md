@@ -1,4 +1,10 @@
-# Stabilizing Timestamps for Whisper
+# Stabilizing Timestamps for Whisper (with some more vad params)
+
+Modification of [stable-ts (stable-whisper)](https://github.com/jianfch/stable-ts), which added support of these VAD params:
+* vad_repo_or_dir - VAD repo name (default = 'snakers4/silero-vad') or local directory (for offline cases)
+* vad_min_speech_duration_ms - Final speech chunks shorter min_speech_duration_ms are thrown out
+* vad_min_silence_duration_ms - In the end of each speech chunk wait for min_silence_duration_ms before separating it
+Params are contained in functions visualize_suppression and transcribe.
 
 This script modifies [OpenAI's Whisper](https://github.com/openai/whisper) to produce more reliable timestamps.
 
